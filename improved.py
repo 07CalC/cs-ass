@@ -14,9 +14,6 @@ from sklearn.ensemble import GradientBoostingRegressor
 
 from pygam import LinearGAM, s
 
-# =========================
-# DATA PREPARATION
-# =========================
 
 def load_data():
     weather = pd.read_csv('Plant_1_Weather_Sensor_Data.csv')
@@ -30,14 +27,12 @@ def load_data():
 
     data = pd.DataFrame()
     
-    # Keep DATE_TIME for our diurnal EDA plot later
     data['DATE_TIME'] = df['DATE_TIME']
 
     data['DNI'] = df['IRRADIATION']
     data['Temperature'] = df['AMBIENT_TEMPERATURE']
     data['Module_Temp'] = df['MODULE_TEMPERATURE']
 
-    # NEW FEATURES
     data['Temp_Diff'] = df['MODULE_TEMPERATURE'] - df['AMBIENT_TEMPERATURE']
     data['Irr_Temp_Ratio'] = df['IRRADIATION'] / (df['AMBIENT_TEMPERATURE'] + 1e-5)
 
@@ -51,14 +46,10 @@ def load_data():
 print("Loading Data...")
 df = load_data()
 
-# Drop DATE_TIME from X so it doesn't break the StandardScaler
 X = df.drop(columns=['GP', 'DATE_TIME'])
 y = df['GP']
 
 
-# =========================
-# TRAIN TEST SPLIT
-# =========================
 
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.3, random_state=42
@@ -69,9 +60,6 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
 
-# =========================
-# BASE MODELS
-# =========================
 
 gpr = GaussianProcessRegressor(
     kernel=RationalQuadratic(), alpha=0.1, random_state=42
@@ -98,9 +86,6 @@ lsboost = GradientBoostingRegressor(
 )
 
 
-# =========================
-# K-FOLD STACKING (NEW)
-# =========================
 
 print("Generating Meta Features with K-Fold...")
 
@@ -126,16 +111,12 @@ for train_idx, val_idx in kf.split(X_train_scaled):
     meta_features[val_idx, 3] = lsboost.predict(X_val)
 
 
-# Train base models on FULL data
 gpr.fit(X_train_scaled, y_train)
 rnn.fit(X_train_scaled, y_train)
 ann.fit(X_train_scaled, y_train)
 lsboost.fit(X_train_scaled, y_train)
 
 
-# =========================
-# TEST META FEATURES
-# =========================
 
 pred_gpr = gpr.predict(X_test_scaled)
 pred_rnn = rnn.predict(X_test_scaled)
@@ -150,10 +131,6 @@ X_test_meta = np.column_stack((
 ))
 
 
-# =========================
-# META MODEL (GAM)
-# =========================
-
 print("Training EnsGAM...")
 
 gam = LinearGAM(
@@ -164,9 +141,6 @@ gam.fit(meta_features, y_train)
 final_predictions = gam.predict(X_test_meta)
 
 
-# =========================
-# EVALUATION
-# =========================
 
 def evaluate(y_true, y_pred, name):
     rmse = np.sqrt(mean_squared_error(y_true, y_pred))
@@ -180,13 +154,9 @@ evaluate(y_test, pred_lsboost, "LSBoost")
 evaluate(y_test, final_predictions, "EnsGAM-Improved")
 
 
-# =========================
-# VISUALIZATION
-# =========================
 
 print("\nGenerating Visualizations...")
 
-# 1. Observed vs Predicted
 fig, axs = plt.subplots(2, 2, figsize=(12, 10))
 fig.suptitle("Observed vs Predicted Power Generation", fontsize=16)
 
@@ -211,7 +181,6 @@ plt.tight_layout()
 plt.savefig("comparison_graph_improved.png")
 print("Saved: comparison_graph_improved.png")
 
-# 2. Correlation Heatmap
 plt.figure(figsize=(10, 8))
 cols_to_corr = ['DNI', 'Temperature', 'Module_Temp', 'Temp_Diff', 'Irr_Temp_Ratio', 'GP']
 corr_matrix = df[cols_to_corr].corr()
@@ -222,7 +191,6 @@ plt.tight_layout()
 plt.savefig("placeholder_correlation_heatmap.png")
 print("Saved: placeholder_correlation_heatmap.png")
 
-# 3. Diurnal Variations
 plt.figure(figsize=(10, 6))
 df['Hour'] = df['DATE_TIME'].dt.hour
 hourly_irradiation = df.groupby('Hour')['DNI'].mean()
